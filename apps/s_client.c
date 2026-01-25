@@ -17,6 +17,7 @@
 #include <openssl/e_os2.h>
 #include "internal/nelem.h"
 #include "internal/sockets.h" /* for openssl_fdset() */
+#include "ssl/ssl_local.h"
 
 #ifndef OPENSSL_NO_SOCK
 
@@ -577,6 +578,8 @@ typedef enum OPTION_choice {
     OPT_KEYMATEXPORTLEN,
     OPT_PROTOHOST,
     OPT_MAXFRAGLEN,
+    OPT_NO_RECORD_SIZE_LIMIT,
+    OPT_RECORD_SIZE_LIMIT,
     OPT_MAX_SEND_FRAG,
     OPT_SPLIT_SEND_FRAG,
     OPT_MAX_PIPELINES,
@@ -642,8 +645,12 @@ const OPTIONS s_client_options[] = {
     { "6", OPT_6, '-', "Use IPv6 only" },
 #endif
     { "maxfraglen", OPT_MAXFRAGLEN, 'p',
-        "Enable Maximum Fragment Length Negotiation (len values: 512, 1024, 2048 and 4096)" },
-    { "max_send_frag", OPT_MAX_SEND_FRAG, 'p', "Maximum Size of send frames " },
+        "Enable Maximum Fragment Length extension (len values: 512, 1024, 2048 and 4096)" },
+    { "no_record_size_limit", OPT_NO_RECORD_SIZE_LIMIT, '-',
+        "Disable the record size limit extension (enabled by default)" },
+    { "record_size_limit", OPT_RECORD_SIZE_LIMIT, 'p',
+        "Specify value of record size limit extension (minimum 64)" },
+    { "max_send_frag", OPT_MAX_SEND_FRAG, 'p', "Maximum size of records" },
     { "split_send_frag", OPT_SPLIT_SEND_FRAG, 'p',
         "Size used to split data for encrypt pipelines" },
     { "max_pipelines", OPT_MAX_PIPELINES, 'p',
@@ -1029,6 +1036,9 @@ int s_client_main(int argc, char **argv)
         = use_unknown;
     int count4or6 = 0;
     uint8_t maxfraglen = 0;
+    uint16_t record_size_limit = 0;
+    int record_size_limit_set = 0;
+    int no_record_size_limit = 0;
     int c_nbio = 0, c_msg = 0, c_ign_eof = 0, c_brief = 0;
     int c_tlsextdebug = 0;
 #ifndef OPENSSL_NO_OCSP
@@ -1621,6 +1631,20 @@ int s_client_main(int argc, char **argv)
                 goto opthelp;
             }
             break;
+        case OPT_RECORD_SIZE_LIMIT:
+            len = atoi(opt_arg());
+            if (!IS_RECORD_SIZE_LIMIT_EXT_VALID(len)) {
+                BIO_printf(bio_err,
+                    "%s: record size limit %u is out of permitted values",
+                    prog, len);
+                goto opthelp;
+            }
+            record_size_limit = len;
+            record_size_limit_set = 1;
+            break;
+        case OPT_NO_RECORD_SIZE_LIMIT:
+            no_record_size_limit = 1;
+            break;
         case OPT_MAX_SEND_FRAG:
             max_send_fragment = atoi(opt_arg());
             break;
@@ -1964,6 +1988,19 @@ int s_client_main(int argc, char **argv)
             "\n",
             prog, maxfraglen);
         goto end;
+    }
+
+    if (no_record_size_limit == 1) {
+        if (record_size_limit_set)
+            BIO_printf(bio_err, "%s: warning: record size limit value set but the extension will not be sent\n", prog);
+
+        SSL_CTX_set_options(ctx, SSL_OP_NO_RECORD_SIZE_LIMIT_EXT);
+    } else {
+        if (record_size_limit_set)
+            SSL_CTX_set_tlsext_record_size_limit(ctx, record_size_limit);
+
+        if (maxfraglen > 0)
+            BIO_printf(bio_err, "%s: warning: both record size limit and maximum fragment length will be sent\n", prog);
     }
 
     if (!ssl_load_stores(ctx,
