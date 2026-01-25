@@ -67,6 +67,8 @@ static int final_supported_versions(SSL_CONNECTION *s, unsigned int context,
 static int final_early_data(SSL_CONNECTION *s, unsigned int context, int sent);
 static int final_maxfragmentlen(SSL_CONNECTION *s, unsigned int context,
     int sent);
+static int final_record_size_limit(SSL_CONNECTION *s, unsigned int context,
+    int sent);
 static int init_post_handshake_auth(SSL_CONNECTION *s, unsigned int context);
 static int final_psk(SSL_CONNECTION *s, unsigned int context, int sent);
 static int tls_init_compress_certificate(SSL_CONNECTION *sc, unsigned int context);
@@ -161,6 +163,12 @@ static const EXTENSION_DEFINITION ext_defs[] = {
         NULL, tls_parse_ctos_maxfragmentlen, tls_parse_stoc_maxfragmentlen,
         tls_construct_stoc_maxfragmentlen, tls_construct_ctos_maxfragmentlen,
         final_maxfragmentlen },
+    { TLSEXT_TYPE_record_size_limit,
+        SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_2_SERVER_HELLO
+            | SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS,
+        NULL, tls_parse_ctos_record_size_limit, tls_parse_stoc_record_size_limit,
+        tls_construct_stoc_record_size_limit, tls_construct_ctos_record_size_limit,
+        final_record_size_limit },
 #ifndef OPENSSL_NO_SRP
     { TLSEXT_TYPE_srp,
         SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_2_AND_BELOW_ONLY,
@@ -1698,6 +1706,38 @@ static int final_maxfragmentlen(SSL_CONNECTION *s, unsigned int context,
         s->rlayer.wrlmethod->set_max_frag_len(s->rlayer.wrl,
             ssl_get_max_send_fragment(s));
     }
+
+    return 1;
+}
+
+static int final_record_size_limit(SSL_CONNECTION *s, unsigned int context,
+    int sent)
+{
+    unsigned int proto_record_hard_limit;
+
+    if ((s->options & SSL_OP_NO_RECORD_SIZE_LIMIT_EXT) != 0)
+        return 1;
+
+    proto_record_hard_limit = ssl_get_proto_record_hard_limit(s);
+    if (!ossl_assert(proto_record_hard_limit != 0)) {
+        SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+        return 0;
+    }
+
+    /*
+     * According to RFC 8449:
+     *
+     * Even if a larger record size limit is provided by a peer, an endpoint
+     * MUST NOT send records larger than the protocol-defined limit, unless
+     * explicitly allowed by a future TLS version or extension.
+     */
+    if (s->ext.peer_record_size_limit > proto_record_hard_limit)
+        s->ext.peer_record_size_limit = proto_record_hard_limit;
+
+    /*
+     * Unlike Maximum Fragment Length, we wait until we update the read/write
+     * record layer when new security parameters are negotiated.
+     */
 
     return 1;
 }

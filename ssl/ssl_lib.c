@@ -7335,6 +7335,25 @@ int SSL_CTX_set_recv_max_early_data(SSL_CTX *ctx, uint32_t recv_max_early_data)
     return 1;
 }
 
+static unsigned int get_proto_record_hard_limit(int version)
+{
+    if (version <= TLS1_2_VERSION
+        || version == DTLS1_2_VERSION
+        || version == DTLS1_VERSION
+        || version == DTLS1_BAD_VER)
+        return SSL3_RT_MAX_PLAIN_LENGTH;
+
+    if (version == TLS1_3_VERSION)
+        return SSL3_RT_MAX_PLAIN_LENGTH + 1;
+
+    return 0;
+}
+
+__owur unsigned int ssl_get_proto_record_hard_limit(const SSL_CONNECTION *sc)
+{
+    return get_proto_record_hard_limit(sc->version);
+}
+
 uint32_t SSL_CTX_get_recv_max_early_data(const SSL_CTX *ctx)
 {
     return ctx->recv_max_early_data;

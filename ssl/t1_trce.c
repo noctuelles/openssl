@@ -487,6 +487,7 @@ static const ssl_trace_tbl ssl_exts_tbl[] = {
     { TLSEXT_TYPE_encrypt_then_mac, "encrypt_then_mac" },
     { TLSEXT_TYPE_extended_master_secret, "extended_master_secret" },
     { TLSEXT_TYPE_compress_certificate, "compress_certificate" },
+    { TLSEXT_TYPE_record_size_limit, "record_size_limit" },
     { TLSEXT_TYPE_session_ticket, "session_ticket" },
     { TLSEXT_TYPE_psk, "psk" },
     { TLSEXT_TYPE_early_data, "early_data" },
@@ -778,6 +779,13 @@ static int ssl_print_extension(BIO *bio, int indent, int server,
             return 0;
         xlen = extlen;
         return ssl_trace_list(bio, indent + 2, ext, xlen, 1, ssl_mfl_tbl);
+
+    case TLSEXT_TYPE_record_size_limit:
+        if (extlen < 2)
+            return 0;
+        BIO_indent(bio, indent + 2, 80);
+        BIO_printf(bio, "value=%u\n", (uint16_t)(ext[0] << 8 | ext[1]));
+        return 1;
 
     case TLSEXT_TYPE_ec_point_formats:
         if (extlen < 1)

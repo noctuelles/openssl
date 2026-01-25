@@ -144,6 +144,9 @@ extern "C" {
 /* ExtensionType value from RFC8879 */
 #define TLSEXT_TYPE_compress_certificate 27
 
+/* ExtensionType vaue from RFC8449 */
+#define TLSEXT_TYPE_record_size_limit 28
+
 /* ExtensionType value from RFC4507 */
 #define TLSEXT_TYPE_session_ticket 35
 
@@ -233,6 +236,10 @@ extern "C" {
 /* OpenSSL value for unset maximum fragment length extension */
 #define TLSEXT_max_fragment_length_UNSPECIFIED 255
 
+#define TLSEXT_record_size_limit_UNSPECIFIED 0
+/* As defined in RFC 8449. */
+#define TLSEXT_record_size_limit_min 64
+
 /*
  * TLS Certificate Type (for RFC7250)
  * https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#tls-extensiontype-values-3
@@ -244,6 +251,9 @@ extern "C" {
 
 int SSL_CTX_set_tlsext_max_fragment_length(SSL_CTX *ctx, uint8_t mode);
 int SSL_set_tlsext_max_fragment_length(SSL *ssl, uint8_t mode);
+
+int SSL_CTX_set_tlsext_record_size_limit(SSL_CTX *ctx, uint8_t mode);
+int SSL_set_tlsext_record_size_limit(SSL *ssl, uint8_t mode);
 
 #define TLSEXT_MAXLEN_host_name 255
 

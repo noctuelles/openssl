@@ -216,6 +216,48 @@ int tls_parse_ctos_maxfragmentlen(SSL_CONNECTION *s, PACKET *pkt,
     return 1;
 }
 
+int tls_parse_ctos_record_size_limit(SSL_CONNECTION *s, PACKET *pkt,
+    unsigned int context,
+    X509 *x, size_t chainidx)
+{
+    unsigned int peer_record_size_limit;
+
+    if ((s->options & SSL_OP_NO_RECORD_SIZE_LIMIT_EXT) != 0)
+        return 1;
+
+    if (!PACKET_get_net_2(pkt, &peer_record_size_limit)) {
+        SSLfatal(s, SSL_AD_DECODE_ERROR, SSL_R_BAD_EXTENSION);
+        return 0;
+    }
+
+    /*
+     * According to RFC 8449:
+     *
+     * An endpoint MUST treat receipt of a smaller value as a fatal error and
+     * generate an "illegal_parameter" alert.
+     *
+     * Minimum value is 64.
+     */
+    if (!IS_RECORD_SIZE_LIMIT_EXT_VALID(peer_record_size_limit)) {
+        SSLfatal(s, SSL_AD_ILLEGAL_PARAMETER,
+            SSL_R_SSL3_EXT_INVALID_RECORD_SIZE_LIMIT);
+        return 0;
+    }
+
+    /* According to RFC 8449:
+     *
+     * A server that supports the "record_size_limit" extension MUST ignore a
+     * "max_fragment_length" that appears in a ClientHello if both extensions
+     * appear.
+     */
+    if (USE_MAX_FRAGMENT_LENGTH_EXT(s->session))
+        s->session->ext.max_fragment_len_mode = TLSEXT_max_fragment_length_DISABLED;
+
+    s->ext.peer_record_size_limit = (uint16_t)peer_record_size_limit;
+
+    return 1;
+}
+
 #ifndef OPENSSL_NO_SRP
 int tls_parse_ctos_srp(SSL_CONNECTION *s, PACKET *pkt, unsigned int context,
     X509 *x, size_t chainidx)
@@ -1634,6 +1676,44 @@ EXT_RETURN tls_construct_stoc_maxfragmentlen(SSL_CONNECTION *s, WPACKET *pkt,
     if (!WPACKET_put_bytes_u16(pkt, TLSEXT_TYPE_max_fragment_length)
         || !WPACKET_start_sub_packet_u16(pkt)
         || !WPACKET_put_bytes_u8(pkt, s->session->ext.max_fragment_len_mode)
+        || !WPACKET_close(pkt)) {
+        SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+        return EXT_RETURN_FAIL;
+    }
+
+    return EXT_RETURN_SENT;
+}
+
+EXT_RETURN tls_construct_stoc_record_size_limit(SSL_CONNECTION *s, WPACKET *pkt,
+    unsigned int context, X509 *x,
+    size_t chainidx)
+{
+    unsigned int proto_record_hard_limit;
+
+    if ((s->options & SSL_OP_NO_RECORD_SIZE_LIMIT_EXT) != 0)
+        return EXT_RETURN_NOT_SENT;
+
+    /* If the peer did not send a Record Size Limit. */
+    if (!IS_RECORD_SIZE_LIMIT_EXT_VALID(s->ext.peer_record_size_limit))
+        return EXT_RETURN_NOT_SENT;
+
+    proto_record_hard_limit = ssl_get_proto_record_hard_limit(s);
+    if (!ossl_assert(proto_record_hard_limit != 0)) {
+        SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
+        return 0;
+    }
+
+    /* Advertise a default value if not specified by the user. */
+    if (s->ext.record_size_limit == TLSEXT_record_size_limit_UNSPECIFIED)
+        s->ext.record_size_limit = proto_record_hard_limit;
+
+    /*-
+     * 4 bytes for this extension type and extension length
+     * 2 byte for the RecordSizeLimit unsigned integer.
+     */
+    if (!WPACKET_put_bytes_u16(pkt, TLSEXT_TYPE_record_size_limit)
+        || !WPACKET_start_sub_packet_u16(pkt)
+        || !WPACKET_put_bytes_u16(pkt, s->ext.record_size_limit)
         || !WPACKET_close(pkt)) {
         SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
         return EXT_RETURN_FAIL;
