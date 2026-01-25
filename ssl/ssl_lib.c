@@ -7340,7 +7340,7 @@ static unsigned int get_proto_record_hard_limit(int version)
     if (version <= TLS1_2_VERSION
         || version == DTLS1_2_VERSION
         || version == DTLS1_VERSION
-        || version == DTLS1_BAD_VER)
+        || version == DTLS1_BAD_VER || version == TLS1_3_VERSION)
         return SSL3_RT_MAX_PLAIN_LENGTH;
 
     if (version == TLS1_3_VERSION)
@@ -7383,27 +7383,19 @@ uint32_t SSL_get_recv_max_early_data(const SSL *s)
 
 __owur unsigned int ssl_get_max_send_fragment(const SSL_CONNECTION *sc)
 {
+    uint16_t ext_limit = 0;
+
     /* Return any active Max Fragment Len extension */
     if (sc->session != NULL && USE_MAX_FRAGMENT_LENGTH_EXT(sc->session))
-        return GET_MAX_FRAGMENT_LENGTH(sc->session);
+        ext_limit = GET_MAX_FRAGMENT_LENGTH(sc->session);
+    else if (sc->ext.peer_record_size_limit_effective != 0 && USE_RECORD_SIZE_LIMIT_EXT(sc)) {
+        ext_limit = sc->ext.peer_record_size_limit;
+    }
 
-    /* return current SSL connection setting */
-    return (unsigned int)sc->max_send_fragment;
-}
-
-__owur unsigned int ssl_get_split_send_fragment(const SSL_CONNECTION *sc)
-{
-    /* Return a value regarding an active Max Fragment Len extension */
-    if (sc->session != NULL && USE_MAX_FRAGMENT_LENGTH_EXT(sc->session)
-        && sc->split_send_fragment > GET_MAX_FRAGMENT_LENGTH(sc->session))
-        return GET_MAX_FRAGMENT_LENGTH(sc->session);
-
-    /* else limit |split_send_fragment| to current |max_send_fragment| */
-    if (sc->split_send_fragment > sc->max_send_fragment)
+    if (ext_limit == 0)
+        return (unsigned int)(MIN(ext_limit, sc->max_send_fragment));
+    else
         return (unsigned int)sc->max_send_fragment;
-
-    /* return current SSL connection setting */
-    return (unsigned int)sc->split_send_fragment;
 }
 
 int SSL_stateless(SSL *s)

@@ -379,7 +379,7 @@ int ssl3_write_bytes(SSL *ssl, uint8_t type, const void *buf_, size_t len,
     n = (len - tot);
 
     max_send_fragment = ssl_get_max_send_fragment(s);
-    split_send_fragment = ssl_get_split_send_fragment(s);
+    split_send_fragment = MIN(s->split_send_fragment, max_send_fragment);
 
     if (max_send_fragment == 0
         || split_send_fragment == 0
@@ -1247,9 +1247,7 @@ int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
     SSL_CTX *sctx = SSL_CONNECTION_GET_CTX(s);
     const OSSL_RECORD_METHOD *meth;
     int use_etm, stream_mac = 0, tlstree = 0;
-    unsigned int maxfrag = (direction == OSSL_RECORD_DIRECTION_WRITE)
-        ? ssl_get_max_send_fragment(s)
-        : SSL3_RT_MAX_PLAIN_LENGTH;
+    unsigned int maxfrag = s->max_send_fragment;
     int use_early_data = 0;
     uint32_t max_early_data;
     COMP_METHOD *compm = (comp == NULL) ? NULL : comp->method;
@@ -1321,14 +1319,25 @@ int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
         *set++ = OSSL_PARAM_construct_int(OSSL_LIBSSL_RECORD_LAYER_PARAM_TLSTREE,
             &tlstree);
 
-    /*
-     * We only need to do this for the read side. The write side should already
-     * have the correct value due to the ssl_get_max_send_fragment() call above
-     */
-    if (direction == OSSL_RECORD_DIRECTION_READ
-        && s->session != NULL
-        && USE_MAX_FRAGMENT_LENGTH_EXT(s->session))
-        maxfrag = GET_MAX_FRAGMENT_LENGTH(s->session);
+    /* Max Fragment Length applies to all kinds of messages: protected or
+     * unprotected. */
+    if (s->session != NULL && USE_MAX_FRAGMENT_LENGTH_EXT(s->session)) {
+        if (direction == OSSL_RECORD_DIRECTION_READ)
+            maxfrag = GET_MAX_FRAGMENT_LENGTH(s->session);
+        else if (direction == OSSL_RECORD_DIRECTION_WRITE)
+            maxfrag = MIN(s->max_send_fragment, GET_MAX_FRAGMENT_LENGTH(s->session));
+    }
+    /* Record Size Limit only applies to protected messages, either by
+     * encryption or by authentification. */
+    else if (level != OSSL_RECORD_PROTECTION_LEVEL_NONE
+        && USE_RECORD_SIZE_LIMIT_EXT(s)) {
+        if (direction == OSSL_RECORD_DIRECTION_READ) {
+            maxfrag = s->ext.record_size_limit;
+        } else if (direction == OSSL_RECORD_DIRECTION_WRITE) {
+            maxfrag = MIN(s->max_send_fragment, s->ext.peer_record_size_limit);
+            s->ext.peer_record_size_limit_effective = 1;
+        }
+    }
 
     if (maxfrag != SSL3_RT_MAX_PLAIN_LENGTH)
         *set++ = OSSL_PARAM_construct_uint(OSSL_LIBSSL_RECORD_LAYER_PARAM_MAX_FRAG_LEN,

@@ -1734,6 +1734,11 @@ static int final_record_size_limit(SSL_CONNECTION *s, unsigned int context,
     if (s->ext.peer_record_size_limit > proto_record_hard_limit)
         s->ext.peer_record_size_limit = proto_record_hard_limit;
 
+    /* Discard the content type byte in TLS 1.3. */
+    if (s->version == TLS1_3_VERSION && s->ext.peer_record_size_limit == SSL3_RT_MAX_PLAIN_LENGTH + 1) {
+        s->ext.peer_record_size_limit -= 1;
+    }
+
     /*
      * Unlike Maximum Fragment Length, we wait until we update the read/write
      * record layer when new security parameters are negotiated.

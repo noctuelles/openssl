@@ -4861,6 +4861,40 @@ int SSL_set_tlsext_max_fragment_length(SSL *ssl, uint8_t mode)
     return 1;
 }
 
+int SSL_CTX_set_tlsext_record_size_limit(SSL_CTX *ctx, uint16_t limit)
+{
+    if (!IS_RECORD_SIZE_LIMIT_EXT_VALID(limit) && limit > SSL3_RT_MAX_PLAIN_LENGTH) {
+        ERR_raise(ERR_LIB_SSL, SSL_R_SSL3_EXT_INVALID_RECORD_SIZE_LIMIT);
+        return 0;
+    }
+
+    ctx->ext.record_size_limit = limit;
+
+    return 1;
+}
+
+int SSL_set_tlsext_record_size_limit(SSL *ssl, uint16_t limit)
+{
+    SSL_CONNECTION *sc = SSL_CONNECTION_FROM_SSL(ssl);
+
+    if (sc == NULL) {
+        return 0;
+    }
+
+    if (IS_QUIC(ssl)) {
+        return 0;
+    }
+
+    if (!IS_RECORD_SIZE_LIMIT_EXT_VALID(limit) && limit > SSL3_RT_MAX_PLAIN_LENGTH) {
+        ERR_raise(ERR_LIB_SSL, SSL_R_SSL3_EXT_INVALID_RECORD_SIZE_LIMIT);
+        return 0;
+    }
+
+    sc->ext.record_size_limit = limit;
+
+    return 1;
+}
+
 uint8_t SSL_SESSION_get_max_fragment_length(const SSL_SESSION *session)
 {
     if (session->ext.max_fragment_len_mode == TLSEXT_max_fragment_length_UNSPECIFIED)

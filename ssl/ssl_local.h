@@ -305,7 +305,7 @@
     (value >= TLSEXT_record_size_limit_min)
 
 #define USE_RECORD_SIZE_LIMIT_EXT(s) \
-    (IS_RECORD_SIZE_LIMIT_EXT_VALID(s->ext.record_size_limit) && IS_RECORD_SIZE_LIMIT_VALID(s->ext.peer_record_size_limit))
+    (IS_RECORD_SIZE_LIMIT_EXT_VALID(s->ext.record_size_limit) && IS_RECORD_SIZE_LIMIT_EXT_VALID(s->ext.peer_record_size_limit))
 
 #define SSL_READ_ETM(s) (s->s3.flags & TLS1_FLAGS_ENCRYPT_THEN_MAC_READ)
 #define SSL_WRITE_ETM(s) (s->s3.flags & TLS1_FLAGS_ENCRYPT_THEN_MAC_WRITE)
@@ -1020,6 +1020,8 @@ struct ssl_ctx_st {
         /* RFC 4366 Maximum Fragment Length Negotiation */
         uint8_t max_fragment_len_mode;
 
+        uint16_t record_size_limit;
+
         /* EC extension values inherited by SSL structure */
         size_t ecpointformats_len;
         unsigned char *ecpointformats;
@@ -1725,6 +1727,14 @@ struct ssl_connection_st {
 
         uint16_t record_size_limit;
         uint16_t peer_record_size_limit;
+
+        /*
+         * This is rather hacky.
+         * When a new protected write record layer is set and the record_size_limit ext is negociated,
+         * this variable is set to 1.
+         * Limiting the record fragment size should only be done when the we are sending protected application data.
+         */
+        int peer_record_size_limit_effective;
 
         /*
          * On the client side the number of ticket identities we sent in the
@@ -2607,7 +2617,6 @@ __owur int ssl_set_tmp_ecdh_groups(uint16_t **pext, size_t *pextlen,
     void *key);
 __owur unsigned int ssl_get_max_send_fragment(const SSL_CONNECTION *sc);
 __owur unsigned int ssl_get_proto_record_hard_limit(const SSL_CONNECTION *sc);
-__owur unsigned int ssl_get_split_send_fragment(const SSL_CONNECTION *sc);
 
 __owur const SSL_CIPHER *ssl3_get_cipher_by_id(uint32_t id);
 __owur const SSL_CIPHER *ssl3_get_cipher_by_std_name(const char *stdname);
