@@ -690,6 +690,7 @@ typedef enum tlsext_index_en {
     TLSEXT_IDX_server_cert_type,
     TLSEXT_IDX_signature_algorithms,
     TLSEXT_IDX_supported_versions,
+    TLSEXT_IDX_record_size_limit,
     TLSEXT_IDX_psk_kex_modes,
     TLSEXT_IDX_key_share,
     TLSEXT_IDX_cookie,

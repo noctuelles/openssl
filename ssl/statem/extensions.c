@@ -163,12 +163,6 @@ static const EXTENSION_DEFINITION ext_defs[] = {
         NULL, tls_parse_ctos_maxfragmentlen, tls_parse_stoc_maxfragmentlen,
         tls_construct_stoc_maxfragmentlen, tls_construct_ctos_maxfragmentlen,
         final_maxfragmentlen },
-    { TLSEXT_TYPE_record_size_limit,
-        SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_2_SERVER_HELLO
-            | SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS,
-        NULL, tls_parse_ctos_record_size_limit, tls_parse_stoc_record_size_limit,
-        tls_construct_stoc_record_size_limit, tls_construct_ctos_record_size_limit,
-        final_record_size_limit },
 #ifndef OPENSSL_NO_SRP
     { TLSEXT_TYPE_srp,
         SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_2_AND_BELOW_ONLY,
@@ -323,6 +317,12 @@ static const EXTENSION_DEFINITION ext_defs[] = {
         NULL, tls_parse_stoc_supported_versions,
         tls_construct_stoc_supported_versions,
         tls_construct_ctos_supported_versions, final_supported_versions },
+    { TLSEXT_TYPE_record_size_limit,
+        SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_2_SERVER_HELLO
+            | SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS,
+        NULL, tls_parse_ctos_record_size_limit, tls_parse_stoc_record_size_limit,
+        tls_construct_stoc_record_size_limit, tls_construct_ctos_record_size_limit,
+        final_record_size_limit },
     { TLSEXT_TYPE_psk_kex_modes,
         SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS_IMPLEMENTATION_ONLY
             | SSL_EXT_TLS1_3_ONLY,

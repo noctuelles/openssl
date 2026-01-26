@@ -65,6 +65,7 @@ static EXT_LIST ext_list[] = {
     EXT_ENTRY(server_cert_type),
     EXT_ENTRY(signature_algorithms),
     EXT_ENTRY(supported_versions),
+    EXT_ENTRY(record_size_limit),
     EXT_ENTRY(psk_kex_modes),
     EXT_ENTRY(key_share),
     EXT_ENTRY(cookie),
