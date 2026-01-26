@@ -648,7 +648,7 @@ const OPTIONS s_client_options[] = {
         "Enable Maximum Fragment Length extension (len values: 512, 1024, 2048 and 4096)" },
     { "no_record_size_limit", OPT_NO_RECORD_SIZE_LIMIT, '-',
         "Disable the record size limit extension (enabled by default)" },
-    { "record_size_limit", OPT_RECORD_SIZE_LIMIT, 'p',
+    { "record_size_limit", OPT_RECORD_SIZE_LIMIT, 'u',
         "Specify value of record size limit extension (minimum 64)" },
     { "max_send_frag", OPT_MAX_SEND_FRAG, 'p', "Maximum size of records" },
     { "split_send_frag", OPT_SPLIT_SEND_FRAG, 'p',
@@ -1037,7 +1037,6 @@ int s_client_main(int argc, char **argv)
     int count4or6 = 0;
     uint8_t maxfraglen = 0;
     uint16_t record_size_limit = 0;
-    int record_size_limit_set = 0;
     int no_record_size_limit = 0;
     int c_nbio = 0, c_msg = 0, c_ign_eof = 0, c_brief = 0;
     int c_tlsextdebug = 0;
@@ -1632,15 +1631,7 @@ int s_client_main(int argc, char **argv)
             }
             break;
         case OPT_RECORD_SIZE_LIMIT:
-            len = atoi(opt_arg());
-            if (!IS_RECORD_SIZE_LIMIT_EXT_VALID(len)) {
-                BIO_printf(bio_err,
-                    "%s: record size limit %u is out of permitted values",
-                    prog, len);
-                goto opthelp;
-            }
-            record_size_limit = len;
-            record_size_limit_set = 1;
+            record_size_limit = atoi(opt_arg());
             break;
         case OPT_NO_RECORD_SIZE_LIMIT:
             no_record_size_limit = 1;
@@ -1991,13 +1982,17 @@ int s_client_main(int argc, char **argv)
     }
 
     if (no_record_size_limit == 1) {
-        if (record_size_limit_set)
+        if (record_size_limit != 0)
             BIO_printf(bio_err, "%s: warning: record size limit value set but the extension will not be sent\n", prog);
 
         SSL_CTX_set_options(ctx, SSL_OP_NO_RECORD_SIZE_LIMIT_EXT);
     } else {
-        if (record_size_limit_set)
-            SSL_CTX_set_tlsext_record_size_limit(ctx, record_size_limit);
+        if (record_size_limit != 0) {
+            if (SSL_CTX_set_tlsext_record_size_limit(ctx, record_size_limit) == 0) {
+                BIO_printf(bio_err, "%s: record size limit %u is out of permitted values\n", prog, record_size_limit);
+                goto end;
+            }
+        }
 
         if (maxfraglen > 0)
             BIO_printf(bio_err, "%s: warning: both record size limit and maximum fragment length will be sent\n", prog);
