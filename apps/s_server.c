@@ -10,6 +10,7 @@
  */
 
 #include "internal/e_os.h"
+#include "ssl/ssl_local.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -944,6 +945,8 @@ typedef enum OPTION_choice {
     OPT_PORT,
     OPT_UNIX,
     OPT_UNLINK,
+    OPT_NO_RECORD_SIZE_LIMIT,
+    OPT_RECORD_SIZE_LIMIT,
     OPT_NACCEPT,
     OPT_VERIFY,
     OPT_NAMEOPT,
@@ -1090,6 +1093,10 @@ const OPTIONS s_server_options[] = {
     { "unix", OPT_UNIX, 's', "Unix domain socket to accept on" },
     { "unlink", OPT_UNLINK, '-', "For -unix, unlink existing socket first" },
 #endif
+    { "no_record_size_limit", OPT_NO_RECORD_SIZE_LIMIT, '-',
+        "Disable the record size limit extension (enabled by default)" },
+    { "record_size_limit", OPT_RECORD_SIZE_LIMIT, 'p',
+        "Specify value of record size limit extension (minimum 64)" },
     { "4", OPT_4, '-', "Use IPv4 only" },
     { "6", OPT_6, '-', "Use IPv6 only" },
 #if defined(TCP_FASTOPEN) && !defined(OPENSSL_NO_TFO)
@@ -1366,6 +1373,8 @@ int s_server_main(int argc, char *argv[])
     tlsextctx tlsextcbp = { NULL, NULL, SSL_TLSEXT_ERR_ALERT_WARNING };
     const char *ssl_config = NULL;
     int read_buf_len = 0;
+    uint16_t record_size_limit = 0;
+    int no_record_size_limit = 0;
 #ifndef OPENSSL_NO_NEXTPROTONEG
     const char *next_proto_neg_in = NULL;
     tlsextnextprotoctx next_proto = { NULL, 0 };
@@ -1537,6 +1546,12 @@ int s_server_main(int argc, char *argv[])
             unlink_unix_path = 1;
             break;
 #endif
+        case OPT_NO_RECORD_SIZE_LIMIT:
+            no_record_size_limit = 1;
+            break;
+        case OPT_RECORD_SIZE_LIMIT:
+            record_size_limit = atoi(opt_arg());
+            break;
         case OPT_NACCEPT:
             naccept = atol(opt_arg());
             break;
@@ -2645,6 +2660,19 @@ int s_server_main(int argc, char *argv[])
             BIO_puts(bio_s_out, "Error setting server certificate types\n");
             goto end;
         }
+    if (no_record_size_limit == 1) {
+        if (record_size_limit != 0)
+            BIO_printf(bio_err, "%s: warning: record size limit value set but the extension will not be sent\n", prog);
+
+        SSL_CTX_set_options(ctx, SSL_OP_NO_RECORD_SIZE_LIMIT_EXT);
+    } else {
+        if (record_size_limit != 0) {
+            if (SSL_CTX_set_tlsext_record_size_limit(ctx, record_size_limit) == 0) {
+                BIO_printf(bio_err, "%s: record size limit %u is out of permitted values\n", prog, record_size_limit);
+                goto end;
+            }
+        }
+    }
 
     if (rev)
         server_cb = rev_body;
