@@ -1329,13 +1329,17 @@ int ssl_set_new_record_layer(SSL_CONNECTION *s, int version,
     }
     /* Record Size Limit only applies to protected messages, either by
      * encryption or by authentification. */
-    else if (level != OSSL_RECORD_PROTECTION_LEVEL_NONE
-        && USE_RECORD_SIZE_LIMIT_EXT(s)) {
-        if (direction == OSSL_RECORD_DIRECTION_READ) {
+    else if (level != OSSL_RECORD_PROTECTION_LEVEL_NONE) {
+        if (direction == OSSL_RECORD_DIRECTION_READ && IS_RECORD_SIZE_LIMIT_EXT_VALID(s->ext.record_size_limit)) {
             maxfrag = s->ext.record_size_limit;
-        } else if (direction == OSSL_RECORD_DIRECTION_WRITE) {
+        } else if (direction == OSSL_RECORD_DIRECTION_WRITE && IS_RECORD_SIZE_LIMIT_EXT_VALID(s->ext.peer_record_size_limit)) {
             maxfrag = MIN(s->max_send_fragment, s->ext.peer_record_size_limit);
             s->ext.peer_record_size_limit_effective = 1;
+        }
+
+        /* Drop the inner content type byte for TLS 1.3. */
+        if (SSL_CONNECTION_IS_TLS13(s) && maxfrag == SSL3_RT_MAX_PLAIN_LENGTH + 1) {
+            maxfrag = SSL3_RT_MAX_PLAIN_LENGTH;
         }
     }
 

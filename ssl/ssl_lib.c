@@ -799,8 +799,10 @@ SSL *ossl_ssl_connection_new_int(SSL_CTX *ctx, SSL *user_ssl,
     X509_VERIFY_PARAM_inherit(s->param, ctx->param);
     s->quiet_shutdown = IS_QUIC_CTX(ctx) ? 0 : ctx->quiet_shutdown;
 
-    if (!IS_QUIC_CTX(ctx))
+    if (!IS_QUIC_CTX(ctx)) {
         s->ext.max_fragment_len_mode = ctx->ext.max_fragment_len_mode;
+        s->ext.record_size_limit = ctx->ext.record_size_limit;
+    }
 
     s->max_send_fragment = ctx->max_send_fragment;
     s->split_send_fragment = ctx->split_send_fragment;
@@ -7340,7 +7342,7 @@ static unsigned int get_proto_record_hard_limit(int version)
     if (version <= TLS1_2_VERSION
         || version == DTLS1_2_VERSION
         || version == DTLS1_VERSION
-        || version == DTLS1_BAD_VER || version == TLS1_3_VERSION)
+        || version == DTLS1_BAD_VER)
         return SSL3_RT_MAX_PLAIN_LENGTH;
 
     if (version == TLS1_3_VERSION)
@@ -7385,14 +7387,13 @@ __owur unsigned int ssl_get_max_send_fragment(const SSL_CONNECTION *sc)
 {
     uint16_t ext_limit = 0;
 
-    /* Return any active Max Fragment Len extension */
     if (sc->session != NULL && USE_MAX_FRAGMENT_LENGTH_EXT(sc->session))
         ext_limit = GET_MAX_FRAGMENT_LENGTH(sc->session);
     else if (sc->ext.peer_record_size_limit_effective != 0 && USE_RECORD_SIZE_LIMIT_EXT(sc)) {
         ext_limit = sc->ext.peer_record_size_limit;
     }
 
-    if (ext_limit == 0)
+    if (ext_limit != 0)
         return (unsigned int)(MIN(ext_limit, sc->max_send_fragment));
     else
         return (unsigned int)sc->max_send_fragment;
