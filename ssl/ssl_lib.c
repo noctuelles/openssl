@@ -7389,7 +7389,7 @@ __owur unsigned int ssl_get_max_send_fragment(const SSL_CONNECTION *sc)
 
     if (sc->session != NULL && USE_MAX_FRAGMENT_LENGTH_EXT(sc->session))
         ext_limit = GET_MAX_FRAGMENT_LENGTH(sc->session);
-    else if (sc->ext.peer_record_size_limit_effective != 0 && USE_RECORD_SIZE_LIMIT_EXT(sc)) {
+    else if (sc->ext.peer_record_size_limit_effective != 0 && IS_RECORD_SIZE_LIMIT_EXT_VALID(sc->ext.peer_record_size_limit)) {
         ext_limit = sc->ext.peer_record_size_limit;
     }
 
