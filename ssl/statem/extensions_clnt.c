@@ -122,30 +122,9 @@ EXT_RETURN tls_construct_ctos_record_size_limit(SSL_CONNECTION *s, WPACKET *pkt,
     unsigned int context, X509 *x,
     size_t chainidx)
 {
-    /*
-     * According to RFC 8449:
-     *
-     * "Endpoints SHOULD advertise the "record_size_limit" extension, even if
-     * they have no need to limit the size of records."
-     *
-     * The extension is by default sent, unless disabled by the user.
-     * If a Max Fragment Length extension has been configured, then send both
-     * extensions with the same size limit.
-     * A server will prefers the record_size_limit extension if it supports it.
-     */
 
     if ((s->options & SSL_OP_NO_RECORD_SIZE_LIMIT_EXT) != 0)
         return EXT_RETURN_NOT_SENT;
-
-    if (s->ext.record_size_limit == TLSEXT_record_size_limit_UNSPECIFIED) {
-        if (IS_MAX_FRAGMENT_LENGTH_EXT_VALID(s->ext.max_fragment_len_mode))
-            s->ext.record_size_limit = GET_MAX_FRAGMENT_LENGTH(s);
-        else
-            s->ext.record_size_limit = ssl_get_proto_record_hard_limit(s);
-
-        if (!ossl_assert(s->ext.record_size_limit != 0))
-            return EXT_RETURN_FAIL;
-    }
 
     if (!WPACKET_put_bytes_u16(pkt, TLSEXT_TYPE_record_size_limit)
         /* Sub-packet for Record Size Limit extension (2 bytes) */

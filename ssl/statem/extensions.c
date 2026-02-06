@@ -37,6 +37,7 @@ static int init_alpn(SSL_CONNECTION *s, unsigned int context);
 static int final_alpn(SSL_CONNECTION *s, unsigned int context, int sent);
 static int init_sig_algs_cert(SSL_CONNECTION *s, unsigned int context);
 static int init_sig_algs(SSL_CONNECTION *s, unsigned int context);
+static int init_record_size_limit(SSL_CONNECTION *s, unsigned int context);
 static int init_server_cert_type(SSL_CONNECTION *sc, unsigned int context);
 static int init_client_cert_type(SSL_CONNECTION *sc, unsigned int context);
 static int init_certificate_authorities(SSL_CONNECTION *s,
@@ -320,7 +321,7 @@ static const EXTENSION_DEFINITION ext_defs[] = {
     { TLSEXT_TYPE_record_size_limit,
         SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_2_SERVER_HELLO
             | SSL_EXT_TLS1_3_ENCRYPTED_EXTENSIONS,
-        NULL, tls_parse_ctos_record_size_limit, tls_parse_stoc_record_size_limit,
+        init_record_size_limit, tls_parse_ctos_record_size_limit, tls_parse_stoc_record_size_limit,
         tls_construct_stoc_record_size_limit, tls_construct_ctos_record_size_limit,
         final_record_size_limit },
     { TLSEXT_TYPE_psk_kex_modes,
@@ -1157,6 +1158,36 @@ static int init_sig_algs(SSL_CONNECTION *s, unsigned int context)
     OPENSSL_free(s->s3.tmp.peer_sigalgs);
     s->s3.tmp.peer_sigalgs = NULL;
     s->s3.tmp.peer_sigalgslen = 0;
+
+    return 1;
+}
+
+static int init_record_size_limit(SSL_CONNECTION *s, unsigned int context)
+{
+    if ((s->options & SSL_OP_NO_RECORD_SIZE_LIMIT_EXT) != 0)
+        return 1;
+
+    /*
+     * According to RFC 8449:
+     *
+     * "Endpoints SHOULD advertise the "record_size_limit" extension, even if
+     * they have no need to limit the size of records."
+     *
+     * The extension is by default sent, unless disabled by the user.
+     * If a Max Fragment Length extension has been configured, then send both
+     * extensions with the same size limit.
+     * A server will prefers the record_size_limit extension if it supports it.
+     */
+
+    if (s->ext.record_size_limit == TLSEXT_record_size_limit_UNSPECIFIED) {
+        if (IS_MAX_FRAGMENT_LENGTH_EXT_VALID(s->ext.max_fragment_len_mode))
+            s->ext.record_size_limit = GET_MAX_FRAGMENT_LENGTH(s);
+        else
+            s->ext.record_size_limit = ssl_get_proto_record_hard_limit(s);
+
+        if (!ossl_assert(s->ext.record_size_limit != 0))
+            return 0;
+    }
 
     return 1;
 }

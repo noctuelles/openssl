@@ -1688,24 +1688,12 @@ EXT_RETURN tls_construct_stoc_record_size_limit(SSL_CONNECTION *s, WPACKET *pkt,
     unsigned int context, X509 *x,
     size_t chainidx)
 {
-    unsigned int proto_record_hard_limit;
-
     if ((s->options & SSL_OP_NO_RECORD_SIZE_LIMIT_EXT) != 0)
         return EXT_RETURN_NOT_SENT;
 
     /* If the peer did not send a Record Size Limit. */
     if (!IS_RECORD_SIZE_LIMIT_EXT_VALID(s->ext.peer_record_size_limit))
         return EXT_RETURN_NOT_SENT;
-
-    proto_record_hard_limit = ssl_get_proto_record_hard_limit(s);
-    if (!ossl_assert(proto_record_hard_limit != 0)) {
-        SSLfatal(s, SSL_AD_INTERNAL_ERROR, ERR_R_INTERNAL_ERROR);
-        return 0;
-    }
-
-    /* Advertise a default value if not specified by the user. */
-    if (s->ext.record_size_limit == TLSEXT_record_size_limit_UNSPECIFIED)
-        s->ext.record_size_limit = proto_record_hard_limit;
 
     /*-
      * 4 bytes for this extension type and extension length
