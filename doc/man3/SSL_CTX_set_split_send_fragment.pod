@@ -30,6 +30,9 @@ SSL_SESSION_get_max_fragment_length - Control fragment size settings and pipelin
  int SSL_set_tlsext_max_fragment_length(SSL *ssl, uint8_t mode);
  uint8_t SSL_SESSION_get_max_fragment_length(const SSL_SESSION *session);
 
+ int SSL_CTX_set_record_size_limit(SSL_CTX *ctx, uint16_t limit);
+ int SSL_set_record_size_limit(SSL_CTX *ctx, uint16_t limit);
+
 =head1 DESCRIPTION
 
 Previous versions of libssl supported the concept of cipher pipelining. There is
@@ -51,7 +54,7 @@ SSL_CTX_set_max_send_fragment() and SSL_set_max_send_fragment() set the
 B<max_send_fragment> parameter for SSL_CTX and SSL objects respectively. This
 value restricts the amount of plaintext bytes that will be sent in any one
 SSL/TLS record. By default its value is SSL3_RT_MAX_PLAIN_LENGTH (16384). These
-functions will only accept a value in the range 512 - SSL3_RT_MAX_PLAIN_LENGTH.
+functions will only accept a value in the range 64 - SSL3_RT_MAX_PLAIN_LENGTH.
 
 SSL_CTX_set_max_pipelines() and SSL_set_max_pipelines() set the maximum number
 of pipelines that will be used at any one time. This value applies to both
@@ -126,10 +129,26 @@ It affects the client-side as only its side may initiate this extension use.
 SSL_SESSION_get_max_fragment_length() gets the maximum fragment length
 negotiated in B<session>.
 
+SSL_CTX_set_record_size_limit() sets the maximum size of a protected record that the endpoint
+is willing to receive.
+This extension is advertise by default, and can be disabled by calling SSL_CTX_set_options(SSL_OP_NO_RECORD_SIZE_LIMIT_EXT).
+If you set a maximum fragment length but do not explicitly set a record size limit, then the record size limit will
+default to the same value as the maximum fragment length.
+If you configure both maximum fragment length and record size limit, they will both be sent during
+the handshake even if they have different values.
+A compliant server will prioritize the record size limit over the maximum fragment length.
+Both server and client can set this limit, but only client may initiate this extension use in the ClientHello.
+
+See the B<Notes> to understand the key differences between maximum fragment length and record size limit.
+
+If a maximum fragment length or record size limit is negotiated during the handshake, and the value set by
+`SSL_CTX_set_max_send_fragment()` is *smaller* than either of those negotiated values,
+then the `SSL_CTX_set_max_send_fragment()` value will be used as the actual limit for the size of sent fragments.
+
 These functions cannot be used with QUIC SSL objects.
 SSL_set_max_send_fragment(), SSL_set_max_pipelines(),
 SSL_set_split_send_fragment(), SSL_set_default_read_buffer_len() and
-SSL_set_tlsext_max_fragment_length() fail if called on a QUIC SSL object.
+SSL_set_tlsext_max_fragment_length(), SSL_set_record_size_limit() fail if called on a QUIC SSL object.
 
 =head1 RETURN VALUES
 
@@ -165,6 +184,15 @@ Sets Maximum Fragment Length to 2048.
 =item TLSEXT_max_fragment_length_4096
 
 Sets Maximum Fragment Length to 4096.
+
+A valid record size limit range is between 64 - SSL3_RT_MAX_PLAIN_LENGTH.
+Record size limit does not apply to unprotected records. For (D)TLS 1.2 and below, initial handshake messages are not
+affected by this limit unlike maximum fragment length. If you need this specific behavior, use maximum fragment length
+instead.
+Record size limit is asymmetric : a server can advertise a limit that is different than the client, and vise versa.
+During renegotiation or resumption, the record size limit is renegotiated.
+Records are subject to the limits that were set in the handshake that produces the keys that are used to protect those records.
+This admits the possibility that the extension might not be negotiated when a connection is renegotiated or resumed.
 
 =back
 
