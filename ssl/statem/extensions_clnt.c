@@ -122,7 +122,6 @@ EXT_RETURN tls_construct_ctos_record_size_limit(SSL_CONNECTION *s, WPACKET *pkt,
     unsigned int context, X509 *x,
     size_t chainidx)
 {
-
     if ((s->options & SSL_OP_NO_RECORD_SIZE_LIMIT_EXT) != 0)
         return EXT_RETURN_NOT_SENT;
 
